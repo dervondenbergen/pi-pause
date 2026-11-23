@@ -19,12 +19,14 @@ To try it without installing:
 pi -e ./src/index.ts
 ```
 
-Install from GitHub (private repositories require Git authentication):
+Install from GitHub:
 
 ```sh
 pi install git:github.com/dervondenbergen/pi-pause
 # Once a corresponding release tag exists, you can pin it with @v0.1.0.
 ```
+
+The package is named `@dervondenbergen/pi-pause` and marked `"private": true` to prevent accidental npm publishing. Installation from GitHub or a local checkout is unaffected.
 
 No build step or runtime npm dependencies are required. Pi supplies the extension API. Tested with `@earendil-works/pi-coding-agent` **1.6.0**; this package relies on its awaited event hooks and root-tool preflight semantics. Other versions need verification.
 

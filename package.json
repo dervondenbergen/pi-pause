@@ -1,6 +1,7 @@
 {
-  "name": "pi-pause",
+  "name": "@dervondenbergen/pi-pause",
   "version": "0.1.0",
+  "private": true,
   "description": "Cooperative /pause and /continue for Pi, with model-invisible diagnostic entries.",
   "type": "module",
   "keywords": [
