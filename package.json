@@ -1,6 +1,6 @@
 {
   "name": "@dervondenbergen/pi-pause",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Cooperative /pause and /continue for Pi, with model-invisible diagnostic entries.",
   "type": "module",
@@ -15,6 +15,7 @@
   "files": [
     "src",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "pi": {
@@ -31,11 +32,13 @@
     "node": ">=22.19"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
   },
   "devDependencies": {
     "@earendil-works/pi-ai": "1.6.0",
     "@earendil-works/pi-coding-agent": "1.6.0",
+    "@earendil-works/pi-tui": "1.6.0",
     "@types/node": "^24.0.0",
     "tsx": "^4.20.0",
     "typebox": "1.4.7",

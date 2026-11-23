@@ -33,12 +33,13 @@ No build step or runtime npm dependencies are required. Pi supplies the extensio
 ## Usage
 
 1. Run `/pause` while Pi works (or while idle).
-2. Wait for **Paused — /continue to resume** before closing your laptop.
+2. Wait for **⏸ Paused · /continue** at the right of the editor border before closing your laptop.
 3. Later, reopen the laptop, let networking reconnect, and run `/continue` in the **same running Pi process**.
 
-While work is draining, the working row and footer show **Pausing… finishing current request / running tools**. Once a safe gate is reached, the working indicator becomes a static pause symbol. The footer also shows the pause when Pi has no working row.
+While work is draining, the **right side of the editor's top border** shows **Pausing… finishing current work**. At a safe gate it changes to **⏸ Paused · /continue**. This label persists while idle, with no duplicate footer or left-hand Working status. Narrow terminals get a shorter label. RPC/SDK clients without the TUI editor receive a single footer status instead.
 
 - A model request already in progress finishes receiving its response. The response is persisted, but its new root tool calls wait.
+- **A visible tool card does not mean execution has started.** Pi 1.6 emits `tool_execution_start` and marks the UI card as started during preflight, before the awaited `tool_call` gate. The first waiting tool can therefore be visible while paused without having run. An abort can give it an `Operation aborted` result without any tool side effects.
 - A sequential tool batch can stop between calls.
 - Tools already running in parallel finish together before the pause is confirmed.
 - `/continue` during **Pausing…** cancels the pause request.
@@ -57,7 +58,7 @@ This is cooperative scheduling, not process suspension or a sandbox:
 - New model calls, tool execution and compaction in the normal agent loop are gated. An in-flight request, active tool or manual compaction can take time to finish.
 - Pending execution lives **in memory**. Closing the lid is fine; quitting Pi, crashing, rebooting or aborting loses the waiting call stack. A restored pause latch is **not** a restored task. The extension warns about this on restoration; check the workspace and send a normal prompt when needed.
 - `/reload` requires an idle agent. A task held at a pause gate is still busy: `/continue` and let it finish, or use `Esc` to abort before reloading. Do not reload a paused active task expecting its continuation to survive.
-- The working row temporarily uses this extension's text/indicator and returns to Pi's default on continue. Other extensions customizing the same row may conflict; the footer provides a second status surface.
+- The TUI decorates the existing custom editor's render output, or uses Pi's `CustomEditor` when none was configured. Input handlers, keybindings, focus and base editor content are retained; cached render arrays are not mutated. The normal Working indicator is temporarily hidden during a pause and shown again on continue. Extensions replacing the editor after this package can displace the decoration.
 - Interactive TUI and UI-enabled RPC/SDK sessions are supported. `/pause` is a no-op in non-interactive print/JSON mode, where there would be no way to issue `/continue`.
 
 ## Invisible diagnostics
@@ -77,7 +78,7 @@ npm ci --ignore-scripts
 npm run check
 ```
 
-Tests cover the latch, next-day timestamps, abort/shutdown, cache warming, compaction gates and restoration. Integration tests use the **real Pi SDK and agent loop**, with deterministic fake model responses and harmless fixture tools (no API keys or paid model calls). Cases include 40 pending calls, parallel draining, sequential edits, parallel preflight, nested tools and model-context exclusion. UI transport is stubbed; actual terminal rendering and overnight sleep/reconnect still warrant a manual smoke test.
+Tests cover the latch, next-day timestamps, abort/shutdown, cache warming, compaction gates, restoration, right-aligned border layout, narrow widths, ANSI/wide characters, theme changes and cached render arrays. Integration tests use the **real Pi SDK and agent loop**, with deterministic fake model responses and harmless fixture tools (no API keys or paid model calls). Cases include 40 pending calls, a visible preflight tool card with zero executions, parallel draining, sequential edits, parallel preflight, nested tools and model-context exclusion. UI transport is stubbed in the automated SDK tests. The right-hand pause border was also smoke-tested in the real Pi CLI in a pseudo-terminal; overnight sleep/reconnect still warrants a manual test.
 
 ### Manual smoke test
 

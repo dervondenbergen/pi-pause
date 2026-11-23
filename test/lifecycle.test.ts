@@ -5,15 +5,24 @@ import pauseExtension, { ENTRY_TYPE } from "../src/index.ts";
 import type { PauseRecord } from "../src/pause-controller.ts";
 
 type Handler = (event: any, ctx: ExtensionContext) => any;
-function setup(hasUI = true, branch: unknown[] = []) {
+function setup(hasUI = true, branch: unknown[] = [], mode: "rpc" | "tui" = "rpc") {
   const handlers = new Map<string, Handler>();
   const commands = new Map<string, { handler: (args: string, ctx: ExtensionContext) => Promise<void> }>();
   const entries: PauseRecord[] = [];
   let idle = true;
+  const statuses: Array<string | undefined> = [];
+  const visibility: boolean[] = [];
+  const editor = { render: (width: number) => ["─".repeat(width), "input", "─".repeat(width)], invalidate() {} };
   const ctx = {
-    hasUI, isIdle: () => idle,
+    hasUI, mode, isIdle: () => idle,
     sessionManager: { getBranch: () => branch },
-    ui: { notify() {}, setStatus() {}, setWorkingMessage() {}, setWorkingIndicator() {} },
+    ui: {
+      notify() {}, setStatus(_key: string, value?: string) { statuses.push(value); },
+      setWorkingVisible(value: boolean) { visibility.push(value); },
+      theme: { fg: (_token: string, text: string) => text },
+      getEditorComponent: () => () => editor,
+      setEditorComponent: (factory: any) => factory({ requestRender() {} }, {}, {}),
+    },
   } as unknown as ExtensionContext;
   // This narrow fake tests only lifecycle wiring; integration.test.ts tests real execution.
   pauseExtension({
@@ -22,12 +31,27 @@ function setup(hasUI = true, branch: unknown[] = []) {
     appendEntry: (type: string, data: PauseRecord) => { assert.equal(type, ENTRY_TYPE); entries.push(data); },
   } as unknown as ExtensionAPI);
   return {
-    entries, ctx,
+    entries, ctx, statuses, visibility, editor,
     idle: (value: boolean) => { idle = value; },
     command: (name: string) => commands.get(name)!.handler("", ctx),
     event: (name: string, event: any = {}) => handlers.get(name)?.(event, ctx),
   };
 }
+
+test("TUI has a persistent right border label, with no duplicate footer or Working message", async () => {
+  const h = setup(true, [], "tui");
+  h.event("session_start");
+  await h.command("pause");
+  assert.match(h.editor.render(80)[0], /Paused · \/continue ─$/);
+  assert.ok(h.statuses.every((value) => value === undefined));
+  assert.equal(h.visibility.at(-1), false);
+  h.event("agent_settled");
+  assert.match(h.editor.render(80)[0], /Paused/);
+  await h.command("continue");
+  assert.equal(h.editor.render(80)[0], "─".repeat(80));
+  assert.equal(h.visibility.at(-1), true);
+  h.event("session_shutdown", { reason: "reload" });
+});
 
 test("cache warming stops during both pausing and paused", async () => {
   const h = setup();

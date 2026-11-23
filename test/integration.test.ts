@@ -65,7 +65,7 @@ async function harness(t: TestContext, fixtures?: ExtensionFactory, manager?: Se
     setWorkingIndicator: () => {},
     notify: () => {},
   }, { get: (target, key) => Reflect.get(target, key) ?? (() => {}) }) as unknown as ExtensionUIContext;
-  await session.bindExtensions({ mode: "tui", uiContext, onError: (e) => errors.push(e) });
+  await session.bindExtensions({ mode: "rpc", uiContext, onError: (e) => errors.push(e) });
   if (fixtures) session.setActiveToolsByName(session.getAllTools().filter((t) => t.sourceInfo.source !== "builtin").map((t) => t.name));
   assert.equal(session.isIdle, true);
   const requests: TranscriptContext[] = [];
@@ -100,9 +100,13 @@ async function harness(t: TestContext, fixtures?: ExtensionFactory, manager?: Se
 
 test("real SDK: pause a response with 40 calls; persist response, execute zero, then resume exactly once", { timeout: 15000 }, async (t) => {
   const executed: string[] = [];
+  const startedCards: string[] = [];
   const h = await harness(t, (pi) => {
     pi.registerTool({ name: "fixture", label: "Fixture", description: "Test", parameters: Type.Object({}),
       async execute(id) { executed.push(id); return { content: [{ type: "text", text: "ok" }], details: {} }; } });
+  });
+  h.session.subscribe((event) => {
+    if (event.type === "tool_execution_start") startedCards.push(event.toolCallId);
   });
   const response = deferred<AssistantMessage>();
   h.respond(response.promise);
@@ -115,6 +119,9 @@ test("real SDK: pause a response with 40 calls; persist response, execute zero, 
   await until(() => h.ui.status?.startsWith("Paused") === true);
   await tick();
   assert.equal(executed.length, 0);
+  // Pi emits this event (and shows the tool card) BEFORE the tool_call gate.
+  assert.deepEqual(startedCards, ["call-0"]);
+  assert.equal(h.session.messages.filter((m) => m.role === "toolResult").length, 0);
   assert.equal(h.requests.length, 1);
   assert.ok(h.session.sessionManager.getEntries().some((e) => e.type === "message" && e.message.role === "assistant"));
   assert.equal(h.records().find((r) => r.event === "paused")?.unfinishedToolCallIds?.length, 40);

@@ -1,33 +1,37 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { PauseController, type PauseRecord } from "./pause-controller.ts";
+import { installPauseBorder, type PauseBorderHandle } from "./pause-border.ts";
 
 export const ENTRY_TYPE = "pi-pause";
 
 export default function pauseExtension(pi: ExtensionAPI) {
   let uiContext: ExtensionContext | undefined;
   const unfinished = new Set<string>();
-  let ownsWorkingUI = false;
+  let border: PauseBorderHandle | undefined;
+  let hiddenWorkingUI = false;
 
   const render = () => {
     const ctx = uiContext;
     if (!ctx?.hasUI) return;
-    if (controller.state === "running") {
+    const running = controller.state === "running";
+    if (border) {
+      // One persistent right-hand border label, including while idle.
+      // Suppress Pi's transient left-hand Working row during the pause.
       ctx.ui.setStatus(ENTRY_TYPE, undefined);
-      if (ownsWorkingUI) {
-        ctx.ui.setWorkingMessage();
-        ctx.ui.setWorkingIndicator();
-        ownsWorkingUI = false;
+      if (!running) {
+        ctx.ui.setWorkingVisible(false);
+        hiddenWorkingUI = true;
+      } else if (hiddenWorkingUI) {
+        ctx.ui.setWorkingVisible(true);
+        hiddenWorkingUI = false;
       }
+      border.refresh();
       return;
     }
-    ownsWorkingUI = true;
-    const paused = controller.state === "paused";
-    const text = paused
+    // RPC/SDK clients without our TUI editor get a single footer status instead.
+    ctx.ui.setStatus(ENTRY_TYPE, running ? undefined : controller.state === "paused"
       ? "Paused — /continue to resume"
-      : "Pausing… finishing current request / running tools";
-    ctx.ui.setStatus(ENTRY_TYPE, text);
-    ctx.ui.setWorkingMessage(text);
-    ctx.ui.setWorkingIndicator(paused ? { frames: ["⏸"] } : undefined);
+      : "Pausing… finishing current request / running tools");
   };
 
   const controller = new PauseController(
@@ -59,6 +63,7 @@ export default function pauseExtension(pi: ExtensionAPI) {
   pi.on("session_start", (_event, ctx) => {
     useContext(ctx);
     if (!ctx.hasUI) return;
+    if (ctx.mode === "tui") border = installPauseBorder(ctx, () => controller.state);
     const last = ctx.sessionManager.getBranch().findLast(
       (entry) => entry.type === "custom" && entry.customType === ENTRY_TYPE,
     );
@@ -105,15 +110,16 @@ export default function pauseExtension(pi: ExtensionAPI) {
     useContext(ctx);
     unfinished.clear();
     controller.settle("agent_settled");
-    render(); // Pi may have removed the working row; the footer remains visible.
+    render(); // The persistent editor label also works after Pi removes its Working row.
   });
   pi.on("session_shutdown", (event, ctx) => {
     useContext(ctx);
     controller.close(event.reason);
-    if (ctx.hasUI && ownsWorkingUI) {
+    border?.dispose();
+    border = undefined;
+    if (ctx.hasUI) {
       ctx.ui.setStatus(ENTRY_TYPE, undefined);
-      ctx.ui.setWorkingMessage();
-      ctx.ui.setWorkingIndicator();
+      if (hiddenWorkingUI) ctx.ui.setWorkingVisible(true);
     }
   });
 }
